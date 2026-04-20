@@ -16,7 +16,9 @@ pip install neuraltrain
 
 ## Citation
 
-Citation coming soon.
+See the [neuralset paper](https://kingjr.github.io/files/neuralset.pdf)
+— BibTeX in the
+[neuralset README](https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/README.md#citation).
 
 ## License
 

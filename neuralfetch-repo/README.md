@@ -12,6 +12,12 @@ Download backends and data-fetching utilities for neuroimaging datasets.
 pip install neuralfetch
 ```
 
+## Citation
+
+See the [neuralset paper](https://kingjr.github.io/files/neuralset.pdf)
+— BibTeX in the
+[neuralset README](https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/README.md#citation).
+
 ## Third-Party Content
 
 References to third-party content from other locations are subject to

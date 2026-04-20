@@ -226,15 +226,27 @@ print(f"MegExtractor(frequency=100): shape {sample.shape}  (channels x time)")
 # fMRI
 # ~~~~~
 #
-# :class:`~neuralset.extractors.neuro.Fmri` supports two mutually
-# exclusive modes:
+# :class:`~neuralset.extractors.neuro.FmriExtractor` supports two
+# mutually exclusive projection modes:
 #
 # - **mesh** — surface-based extraction
 # - **atlas** — parcellation-based extraction
 #
-# Additional parameters: ``space`` (e.g. ``"MNI152NLin2009cAsym"``),
-# ``confounds_strategy`` for nuisance regression, and ``offset`` to
-# account for hemodynamic delay.
+# Additional parameters: ``from_space`` to select the input space
+# (e.g. ``"MNI152NLin2009cAsym"``), ``cleaning`` for signal cleaning
+# (detrending, standardization, optional confound regression), and
+# ``offset`` to account for hemodynamic delay.
+
+fmri_study = ns.Study(
+    name="Test2023Fmri",  # synthetic study: random volumes (.5Hz, 20s)
+    path=ns.CACHE_FOLDER,
+    query="timeline_index < 1",  # only 1 timeline
+)
+fmri_events = fmri_study.run()
+
+fmri = ns.extractors.FmriExtractor()  # projection=None → raw volumetric
+fmri_sample = fmri(fmri_events, start=0.0, duration=2.0)
+print(f"fMRI shape: {fmri_sample.shape}  (x, y, z, time)")
 
 # %%
 # Text

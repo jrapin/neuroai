@@ -149,7 +149,40 @@ intersphinx_mapping = {
     "scipy": ("https://scipy.github.io/devdocs/", None),
     "matplotlib": ("https://matplotlib.org/stable/", None),
     "torch": ("https://pytorch.org/docs/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "pydantic": ("https://docs.pydantic.dev/latest/", None),
+    "exca": ("https://facebookresearch.github.io/exca/", None),
 }
+
+# -- Nitpicky mode: flag unresolved cross-references ------------------------
+# Most surviving targets are either (a) signature-parse artefacts where
+# Sphinx treats a default/literal value as a class reference, or (b) short
+# names (``Tensor``, ``Module``, ``Path``) that lack a qualifying module in
+# the source docstring. We suppress those en masse; genuine typos in
+# dotted paths should still surface as warnings.
+nitpicky = True
+nitpick_ignore_regex = [
+    # (a) literal values misinterpreted as class refs from signature parsing
+    (r"py:class", r"^\w+\s*=.*"),  # keyword=value fragments
+    (r"py:class", r"^optional( .*)?$"),
+    (r"py:class", r"^[\"'].*"),  # quoted literals
+    (r"py:class", r"^\{.*"),  # dict/set literals
+    (r"py:class", r"^-?\d[\d._e+-]*$"),  # numeric literals
+    (r"py:class", r"^\.\.$"),
+    (r"py:class", r"^tp\.Literal$"),
+    # (b) malformed type annotations in docstrings (real Python refs never
+    # contain whitespace)
+    (r"py:class", r".*\s.*"),
+    # (c) short names lacking module context
+    (r"py:class", r"^(Tensor|Module|Path|PathLike|PIL\.Image)$"),
+    # (d) third-party libraries with no intersphinx inventory
+    (r"py:class", r"^annotated_types\..*"),
+    (r"py:(class|func)", r"^huggingface_hub\..*"),
+    (r"py:class", r"^_?PydanticUndefined$"),
+    (r"py:class", r"^_PydanticGeneralMetadata$"),
+    # (e) private helpers referenced in public docstrings
+    (r"py:class", r".*\._[A-Za-z]\w*$"),
+]
 
 
 autosummary_generate = True

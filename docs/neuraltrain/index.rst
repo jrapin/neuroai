@@ -154,6 +154,14 @@ Each tutorial covers one stage of the training pipeline.
      <a href="auto_examples/data/01_data.html" class="page-nav-btn">Start: Data Pipeline &rarr;</a>
    </div>
 
+----
+
+Citation
+--------
+
+See the :doc:`neuralset page </neuralset/index>` for the preferred
+citation (BibTeX at the bottom).
+
 .. toctree::
    :maxdepth: 2
    :hidden:
