@@ -92,7 +92,17 @@ class WordFrequency(BaseText):
     def get_embedding(self, text: str, language: str = "") -> np.ndarray:
         from wordfreq import zipf_frequency  # noqa
 
-        value = zipf_frequency(text, self.LANGUAGES.get(self.language, self.language))
+        # The per-event language wins (it is the ground truth for the data),
+        # falling back to the extractor's `language` only when the event carries
+        # none -- same precedence as SpacyEmbedding. Lowercase so both names and
+        # 2-letter codes resolve (wordfreq needs lowercase).
+        lang = (language or self.language or "").lower()
+        if not lang:
+            raise ValueError(
+                "No language specified: set language on the extractor or "
+                "populate language on events."
+            )
+        value = zipf_frequency(text, self.LANGUAGES.get(lang, lang))
         return np.array([value])
 
 
