@@ -699,7 +699,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "notch_filter",
         "event_types",
         "scale_factor",
-        "bipolar_ref",
+        "reference",
         "infra",  # for version
         "fill_non_finite",
     }
@@ -1418,8 +1418,8 @@ def test_ieeg(test_data_path: Path) -> None:
         frequency=sfreq,
         baseline=(tmin, tmax),
         filter=(0.05, 20.0),
-        reference="bipolar",
-        picks=("seeg",),  # bipolar is only allowed with seeg
+        reference=ns.extractors.BipolarRef(),
+        picks=("seeg",),  # auto bipolar is only valid for seeg
         notch_filter=50.0,
         drop_bads=True,
     )
@@ -1428,24 +1428,14 @@ def test_ieeg(test_data_path: Path) -> None:
     assert preproc_data.shape == (24, sfreq * duration)
 
 
-def test_bipolar_ieeg(tmp_path: Path) -> None:
-    expected = "Bipolar reference can only be applied on seeg signals"
-    with pytest.raises(ValueError, match=expected):
-        ns.extractors.IeegExtractor(picks=("ecog",), reference="bipolar")
-
-
-def test_ieeg_cannot_combine_bipolar_modes() -> None:
-    expected = "Cannot use both reference='bipolar'"
-    with pytest.raises(ValueError, match=expected):
-        ns.extractors.IeegExtractor(
-            picks=("seeg",),
-            reference="bipolar",
-            bipolar_ref=(["A1"], ["A2"]),
-        )
+def test_bipolar_ref_auto_requires_seeg() -> None:
+    """BipolarRef() auto-derive raises at construction when picks contain no seeg."""
+    with pytest.raises(ValueError, match="requires seeg channels"):
+        ns.extractors.IeegExtractor(picks=("ecog",), reference=ns.extractors.BipolarRef())
 
 
 def test_bipolar_ref_explicit() -> None:
-    """MneRaw.bipolar_ref produces the expected bipolar channels."""
+    """BipolarRef with explicit anodes/cathodes produces the expected bipolar channels."""
     ch_names = ["Fp1", "F7", "T7", "P7"]
     sfreq = 200.0
     data = np.random.RandomState(0).randn(len(ch_names), int(sfreq * 2))
@@ -1456,7 +1446,7 @@ def test_bipolar_ref_explicit() -> None:
     cathodes = ["F7", "T7", "P7"]
     extractor = ns.extractors.EegExtractor(
         picks=tuple(ch_names),
-        bipolar_ref=(anodes, cathodes),
+        reference=ns.extractors.BipolarRef(anodes=anodes, cathodes=cathodes),
     )
 
     result = extractor._preprocess_raw(
@@ -1470,12 +1460,67 @@ def test_bipolar_ref_explicit() -> None:
     np.testing.assert_array_almost_equal(result.data[fp1_f7_idx], data[0] - data[1])
 
 
-def test_bipolar_ref_validation() -> None:
-    """bipolar_ref anodes and cathodes must have equal length."""
-    with pytest.raises(ValueError, match="equal length"):
-        ns.extractors.EegExtractor(
-            bipolar_ref=(["Fp1", "F7"], ["F7"]),
-        )
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [
+        ({"anodes": ["Fp1", "F7"], "cathodes": ["F7"]}, "equal length"),
+        ({"anodes": ["Fp1"]}, "both be provided or both be None"),
+    ],
+)
+def test_bipolar_ref_construction_errors(kwargs: dict, match: str) -> None:
+    """BipolarRef raises at construction for invalid anode/cathode configurations."""
+    with pytest.raises(ValueError, match=match):
+        ns.extractors.BipolarRef(**kwargs)
+
+
+def test_car_ref() -> None:
+    """CarRef references each channel type to its own per-type average independently.
+
+    Groups are offset in opposite directions so a global CAR would produce wrong
+    values, ensuring the per-type isolation is verified by the value check.
+    """
+    seeg_names = ["A1", "A2", "A3"]
+    ecog_names = ["G1", "G2", "G3", "G4"]
+    ch_names = seeg_names + ecog_names
+    ch_types = ["seeg"] * len(seeg_names) + ["ecog"] * len(ecog_names)
+    sfreq = 100.0
+    rng = np.random.RandomState(0)
+    data = rng.randn(len(ch_names), int(sfreq * 2))
+    data[: len(seeg_names)] += 5.0
+    data[len(seeg_names) :] -= 5.0
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types=ch_types)
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.IeegExtractor(
+        picks=("seeg", "ecog"),
+        reference=ns.extractors.CarRef(),
+    )
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+
+    seeg_data = data[: len(seeg_names)]
+    ecog_data = data[len(seeg_names) :]
+    expected_seeg = seeg_data - seeg_data.mean(axis=0, keepdims=True)
+    expected_ecog = ecog_data - ecog_data.mean(axis=0, keepdims=True)
+
+    seeg_idx = [result.ch_names.index(n) for n in seeg_names]
+    ecog_idx = [result.ch_names.index(n) for n in ecog_names]
+    np.testing.assert_array_almost_equal(result.data[seeg_idx], expected_seeg, decimal=5)
+    np.testing.assert_array_almost_equal(result.data[ecog_idx], expected_ecog, decimal=5)
+
+
+@pytest.mark.parametrize(
+    "extractor_cls,match",
+    [
+        (ns.extractors.MegExtractor, "CarRef is not supported for MEG"),
+        (ns.extractors.EmgExtractor, "CarRef is not supported for EMG"),
+    ],
+)
+def test_car_ref_not_supported(extractor_cls: type, match: str) -> None:
+    """CarRef raises at instantiation for channel types that don't support it."""
+    with pytest.raises(ValueError, match=match):
+        extractor_cls(reference=ns.extractors.CarRef())
 
 
 def test_overlap() -> None:

@@ -28,6 +28,9 @@ from .meta import (
 from .neuro import (
     AtlasProjector,
     BaseFmriProjector,
+    BaseRef,
+    BipolarRef,
+    CarRef,
     ChannelPositions,
     EegExtractor,
     EmgExtractor,
