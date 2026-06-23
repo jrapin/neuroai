@@ -26,7 +26,7 @@ import neuralset as ns
 from neuralset.base import TimedArray
 from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
-from neuralset.extractors.neuro import FmriTimedArray, _overlap
+from neuralset.extractors.neuro import BaselineMode, FmriTimedArray, _overlap
 
 # avoid processpool which requires permissions unavailable in sandboxes
 _NO_CLUSTER: tp.Any = {"cluster": None}
@@ -464,6 +464,54 @@ def test_meg_baseline(
 
 
 @pytest.mark.parametrize(
+    "mode",
+    ["mean", "ratio", "logratio", "percent", "zscore", "zlogratio"],
+)
+def test_meg_baseline_mode_matches_mne(mode: BaselineMode, test_data_path: Path) -> None:
+    ns.Study(
+        name="Test2023Meg",
+        path=test_data_path,
+        query="timeline_index<1",
+        infra_timelines=_NO_CLUSTER,
+    ).run()
+    fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
+
+    sfreq = 100.0
+    start = 2.0
+    duration = 1.0
+    baseline = (-0.2, 0.0)
+    event = make_meg_event(fif, start=0.0)
+
+    # Extract extended window (includes baseline period) without normalization
+    full_start = start + baseline[0]
+    full_duration = duration - baseline[0]
+    extractor = ns.extractors.MegExtractor(frequency=sfreq, baseline=None)
+    full_data = extractor(event, start=full_start, duration=full_duration).numpy()
+
+    # Compute expected using MNE rescale, then crop to the target window
+    n_full = full_data.shape[-1]
+    times = baseline[0] + (np.arange(n_full, dtype=float) + 0.5) / sfreq
+    rescaled = mne.baseline.rescale(
+        full_data, times, baseline, mode=mode, copy=True, verbose=False
+    )
+    n_bl_samples = round(-baseline[0] * sfreq)
+    expected = rescaled[:, n_bl_samples:]
+
+    # Extract with baseline normalization
+    extractor = ns.extractors.MegExtractor(
+        frequency=sfreq, baseline=baseline, baseline_mode=mode
+    )
+    actual = extractor(event, start=start, duration=duration).numpy()
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-5)
+
+
+def test_meg_baseline_mode_invalid() -> None:
+    with pytest.raises(ValueError, match="baseline_mode"):
+        ns.extractors.MegExtractor(baseline_mode="median")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
     "offset,minmax",
     [
         (0, (0.5, 1.49)),
@@ -688,6 +736,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "drop_bads",
         "picks",
         "baseline",
+        "baseline_mode",
         "frequency",
         "apply_proj",
         "offset",
